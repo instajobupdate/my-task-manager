@@ -4,9 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#172554">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg">
-<link rel="manifest" href="manifest.webmanifest">
 <title>My Task Manager</title>
 <style>
 :root{
@@ -287,8 +284,12 @@ button{cursor:pointer}
 }
 
 
-.alert-test{margin-top:8px;border:1px solid #dfe4ee;background:#f8faff;color:#4f5d76;border-radius:10px;padding:7px 9px;font-size:10px;font-weight:850}
-.notify-status{font-size:9px;color:#778197;margin-top:6px;font-weight:750}
+.notify-card{display:flex;align-items:center;gap:11px;padding:12px 13px;margin:0 0 11px;border:1px solid #dfe5f0;border-radius:17px;background:rgba(255,255,255,.92);box-shadow:0 6px 18px rgba(35,45,100,.06)}
+.notify-icon{width:36px;height:36px;display:grid;place-items:center;border-radius:12px;background:#eef2ff;font-size:17px}
+.notify-copy{flex:1;min-width:0}.notify-copy b{display:block;font-size:12px}.notify-copy span{display:block;margin-top:2px;color:#748096;font-size:9px;line-height:1.35}
+.notify-card button{border:0;border-radius:10px;padding:8px 11px;background:#4f46e5;color:#fff;font-size:10px;font-weight:900}
+.notify-card.on{border-color:#bcebd8;background:#f2fdf8}.notify-card.on .notify-icon{background:#dcfce9}.notify-card.on button{background:#10b981}
+@media(max-width:720px){.notify-card{margin-bottom:9px;padding:10px 11px;border-radius:15px}}
 
 </style>
 </head>
@@ -308,7 +309,12 @@ button{cursor:pointer}
     <div class="hero-actions"><button class="primary" id="heroAdd">＋ Add Task</button><button class="secondary" id="heroPending">View Pending</button><button class="secondary" id="notifyBtn">🔔 Enable Alerts</button></div>
   </section>
 
-  <section class="stats">
+  <section class="notify-card" id="notifyCard">
+  <div class="notify-icon">🔔</div>
+  <div class="notify-copy"><b id="notifyTitle">Task Alerts</b><span id="notifyStatus">Enable notifications for due-time alerts, sound and vibration.</span></div>
+  <button id="notifyCardBtn" type="button">Enable</button>
+</section>
+<section class="stats">
     <button class="stat s-today" data-filter="today"><div class="stat-top"><span class="stat-icon">◷</span></div><b id="today">0</b><span>Today</span></button>
     <button class="stat s-overdue" data-filter="overdue"><div class="stat-top"><span class="stat-icon">!</span></div><b id="overdue">0</b><span>Overdue</span></button>
     <button class="stat s-pending" data-filter="pending"><div class="stat-top"><span class="stat-icon">↗</span></div><b id="pending">0</b><span>Pending</span></button>
@@ -432,48 +438,37 @@ function showAlert(title,text){
 }
 $('alertClose').onclick=()=>$('alertBox').classList.remove('show');
 
-let audioCtx=null;
-function playAlertSound(){
-  try{
-    audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
-    if(audioCtx.state==='suspended')audioCtx.resume();
-    const now=audioCtx.currentTime;
-    [0,0.22,0.44].forEach((delay,i)=>{
-      const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
-      osc.type='sine';osc.frequency.value=i===1?880:660;
-      gain.gain.setValueAtTime(.0001,now+delay);
-      gain.gain.exponentialRampToValueAtTime(.18,now+delay+.02);
-      gain.gain.exponentialRampToValueAtTime(.0001,now+delay+.18);
-      osc.connect(gain);gain.connect(audioCtx.destination);
-      osc.start(now+delay);osc.stop(now+delay+.2);
-    });
-  }catch(e){}
-}
-function vibrateAlert(){try{if(navigator.vibrate)navigator.vibrate([180,100,180,100,350])}catch(e){}}
-
 async function enableAlerts(){
   if(!('Notification' in window)){
-    showAlert('Alerts unavailable','This browser does not support system notifications. In-app alerts, sound and vibration can still work while the page is open.');
-    playAlertSound();vibrateAlert();return;
+    showAlert('Alerts unavailable','This browser does not support notifications. In-app reminders will still work while this page is open.');
+    return;
   }
   try{
     const p=await Notification.requestPermission();
     if(p==='granted'){
       localStorage.setItem('myTaskNotifications','on');
-      $('notifyBtn').textContent='🔔 Alerts On';$('notifyBtn').classList.add('enabled');
-      playAlertSound();vibrateAlert();
-      showAlert('Alerts enabled','Sound + vibration + browser notifications are ready.');
-      if('serviceWorker' in navigator){
-        try{await navigator.serviceWorker.register('sw.js')}catch(e){}
-      }
+      $('notifyBtn').textContent='🔔 Alerts On';$('notifyBtn').classList.add('enabled');updateNotifyUI(true);
+      showAlert('Alerts enabled','You will get reminders while My Task Manager is open.');
       checkReminders();
     }else{
-      showAlert('Alerts are off','Allow notifications in browser/site settings to receive system alerts.');
+      showAlert('Alerts are off','Allow notifications in your browser settings to receive system alerts.');
     }
-  }catch(e){showAlert('Alerts unavailable','Please allow notifications from your browser/site settings.')}
+  }catch(e){showAlert('Alerts unavailable','Please allow notifications from your browser settings.')}
 }
 $('notifyBtn').onclick=enableAlerts;
 
+
+function updateNotifyUI(on){
+  const card=document.getElementById('notifyCard'),btn=document.getElementById('notifyCardBtn');
+  const title=document.getElementById('notifyTitle'),status=document.getElementById('notifyStatus');
+  if(!card)return;
+  card.classList.toggle('on',!!on);
+  title.textContent=on?'Task Alerts On':'Task Alerts';
+  status.textContent=on?'Browser notifications enabled. Due tasks can trigger alert, sound and vibration while the app can run.':'Enable notifications for due-time alerts, sound and vibration.';
+  btn.textContent=on?'Enabled':'Enable';
+}
+
+document.getElementById('notifyCardBtn').onclick=enableAlerts;
 function checkReminders(){
   const now=new Date();
   let changed=false;
@@ -483,7 +478,7 @@ function checkReminders(){
     if(d<=now){
       const title='⏰ Task Reminder';
       const text=t.name+' is due now.';
-      showAlert(title,text);playAlertSound();vibrateAlert();
+      showAlert(title,text);
       if('Notification' in window && Notification.permission==='granted'){
         try{new Notification(title,{body:text,tag:'task-'+t.id})}catch(e){}
       }
@@ -493,10 +488,7 @@ function checkReminders(){
   if(changed)persist();
 }
 if(localStorage.getItem('myTaskNotifications')==='on' && 'Notification' in window && Notification.permission==='granted'){
-  $('notifyBtn').textContent='🔔 Alerts On';$('notifyBtn').classList.add('enabled');
-}
-if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  $('notifyBtn').textContent='🔔 Alerts On';$('notifyBtn').classList.add('enabled');updateNotifyUI(true);
 }
 checkReminders();
 
@@ -549,12 +541,5 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('attachPreview').
 render();setInterval(()=>{checkReminders();render()},60000);
 })();
 </script>
-
-<script>
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
-}
-</script>
-
 </body>
 </html>
